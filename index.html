@@ -179,8 +179,8 @@
             }
 
             //Обновление цвета клеток на основе владельца
-            for (let i = 0; i < boardCells.length; i++) {
-                const cell = boardCells[i];
+            for (let i = 0; i < gameState.boardCells.length; i++) {
+                const cell = gameState.boardCells[i];
                 if (cell.owner) {
                     const owner = players[cell.owner];
                     const color = owner?.color || "white";
@@ -269,6 +269,12 @@
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
 
+            if (message.type === "board_state") {
+                gameState.boardCells = message.board_cells;
+                createBoard();
+                updateBoard(gameState.players);
+            }
+
             if (message.type === "offer_to_buy") {
                 const confirmBuy = confirm(message.message);
                 if (confirmBuy) {
@@ -319,7 +325,6 @@
                 }
             }
         }
-        
 
         const chanceCards = [
             { text: "Получите 100", action: (player) => player.money += 100 },
