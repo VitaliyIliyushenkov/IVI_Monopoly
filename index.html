@@ -93,7 +93,46 @@
         const urlParams = new URLSearchParams(window.location.search);
         const userName = urlParams.get("user_name");
         const userId = urlParams.get("user_id");
-        const playerColors = {};  
+        const playerColors = {}; 
+
+        const boardCells = [
+            { type: "start", name: "Старт", action: () => {} },
+            { type: "property", name: "Улица Ленина", price: 100, rent: 10, owner: null },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "chance", name: "Случайность", action: () => drawChanceCard() },
+            { type: "tax", name: "Налог", amount: 50, action: (player) => player.money -= 50 },
+            { type: "property", name: "Улица Гоголя", price: 150, rent: 15, owner: null },
+            { type: "jail", name: "Тюрьма", action: (player) => { player.inJail = true; } },
+            { type: "property", name: "Улица Чехова", price: 200, rent: 20, owner: null },
+            { type: "free", name: "Бесплатная парковка", action: () => {} },
+            { type: "go_to_jail", name: "Иди в тюрьму", action: (player) => player.position = 6 },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "property", name: "Улица Ленина", price: 100, rent: 10, owner: null },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "start", name: "Старт", action: () => {} },
+            { type: "property", name: "Улица Ленина", price: 100, rent: 10, owner: null },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "chance", name: "Случайность", action: () => drawChanceCard() },
+            { type: "tax", name: "Налог", amount: 50, action: (player) => player.money -= 50 },
+            { type: "property", name: "Улица Гоголя", price: 150, rent: 15, owner: null },
+            { type: "jail", name: "Тюрьма", action: (player) => { player.inJail = true; } },
+            { type: "property", name: "Улица Чехова", price: 200, rent: 20, owner: null },
+            { type: "free", name: "Бесплатная парковка", action: () => {} },
+            { type: "go_to_jail", name: "Иди в тюрьму", action: (player) => player.position = 6 },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "property", name: "Улица Ленина", price: 100, rent: 10, owner: null },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "start", name: "Старт", action: () => {} },
+            { type: "property", name: "Улица Ленина", price: 100, rent: 10, owner: null },
+            { type: "property", name: "Улица Пушкина", price: 120, rent: 12, owner: null },
+            { type: "chance", name: "Случайность", action: () => drawChanceCard() },
+            { type: "tax", name: "Налог", amount: 50, action: (player) => player.money -= 50 },
+            { type: "property", name: "Улица Гоголя", price: 150, rent: 15, owner: null },
+            { type: "jail", name: "Тюрьма", action: (player) => { player.inJail = true; } },
+            { type: "property", name: "Улица Чехова", price: 200, rent: 20, owner: null },
+            { type: "free", name: "Бесплатная парковка", action: () => {} },
+            { type: "go_to_jail", name: "Иди в тюрьму", action: (player) => player.position = 6 },
+        ]; 
 
         const socket = new WebSocket("ws://127.0.0.1:8000/ws/" + userId + "/" + userName);
 
@@ -140,8 +179,8 @@
             }
 
             //Обновление цвета клеток на основе владельца
-            for (let i = 0; i < gameState.boardCells.length; i++) {
-                const cell = gameState.boardCells[i];
+            for (let i = 0; i < boardCells.length; i++) {
+                const cell = boardCells[i];
                 if (cell.owner) {
                     const owner = players[cell.owner];
                     const color = owner?.color || "white";
@@ -230,13 +269,6 @@
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
 
-            // Получаем список ячеек поля от сервера
-            if (message.type === "board_state") {
-                gameState.boardCells = message.board_cells;
-                createBoard();
-                updateBoard(gameState.players);
-            }
-
             if (message.type === "offer_to_buy") {
                 const confirmBuy = confirm(message.message);
                 if (confirmBuy) {
@@ -246,7 +278,7 @@
                     }));
 
                     const player = gameState.players[userId];
-                    for (const cell of gameState.boardCells) {
+                    for (const cell of boardCells) {
                         if (cell.name === message.cell) {
                             cell.owner = userId;
                             const ownedCell = document.querySelector(`#cell-${player.position}`);
