@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Монополия</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Чтобы избежать прокрутки */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh; /* Используем всю высоту экрана */
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            gap: 2px;
+            width: 90%;
+            height: 90%;
+            position: relative;
+            border: 2px solid #000;
+        }
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #000;
+            font-size: 10px;
+        }
+        .empty {
+            visibility: hidden; /* Скрываем внутренние клетки */
+        }
+        #roll-dice {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+        }
+        #dice-result {
+            position: absolute;
+            bottom: 10%;
+            font-size: 20px;
+            font-weight: bold;
+            color: #000;
+        }
+        .player {
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+        }
+        .player div {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ccc; 
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="board"></div>
+        <button id="roll-dice">Бросить кубик</button>
+        <div id="dice-result"></div>
+    </div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get("user_name");
+        const userId = urlParams.get("user_id");
+        const playerColors = {};  
+
+        const socket = new WebSocket("ws://127.0.0.1:8000/ws/" + userId + "/" + userName);
+
+        let gameState = {};
+
+        // Создание игрового поля 10×10 с клетками по границе
+        function createBoard() {
+            const board = document.getElementById("board");
+            board.innerHTML = "";
+
+            for (let row = 0; row < 10; row++) {
+                for (let col = 0; col < 10; col++) {
+                    const cell = document.createElement("div");
+                    cell.className = "cell";
+
+                    if (row === 0 || row === 9 || col === 0 || col === 9) {
+                        cell.id = `cell-${row}-${col}`;
+                    } else {
+                        cell.classList.add("empty");
+                    }
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        // Обновление позиций игроков
+        function updateBoard(players) {
+
+            // Баланс
+            const balanceElements = document.querySelectorAll(".player-balance");
+            balanceElements.forEach(el => el.remove());
+
+            for (const player of Object.values(players)) {
+                const balanceElement = document.createElement("div");
+                balanceElement.className = "player-balance";
+                balanceElement.textContent = `${player.name}: ${player.money}`;
+                balanceElement.style.position = "absolute";
+                balanceElement.style.bottom = "10px";
+                balanceElement.style.left = "10px";
+                balanceElement.style.backgroundColor = "#fff";
+                balanceElement.style.padding = "5px";
+                balanceElement.style.border = "1px solid #000";
+                document.body.appendChild(balanceElement);
+            }
+
+            //Обновление цвета клеток на основе владельца
+            for (let i = 0; i < gameState.boardCells.length; i++) {
+                const cell = gameState.boardCells[i];
+                if (cell.owner) {
+                    const owner = players[cell.owner];
+                    const color = owner?.color || "white";
+
+                    let row, col;
+                    if (i <= 9) {
+                        row = 0;
+                        col = i;
+                    } else if (i <= 18) {
+                        row = i - 9;
+                        col = 9;
+                    } else if (i <= 27) {
+                        row = 9;
+                        col = 27 - i;
+                    } else {
+                        row = 36 - i;
+                        col = 0;
+                    }
+
+                    const ownedCell = document.getElementById(`cell-${row}-${col}`);
+                    if (ownedCell) {
+                        ownedCell.style.backgroundColor = color;
+                        ownedCell.style.border = `3px solid ${color}`;
+                    }
+                }
+            }
+
+            // Расставляем игроков на поле
+            for (const [id, player] of Object.entries(players)) {
+                const position = player.position;
+
+                // Преобразование позиции (0-35) в координаты
+                let row, col;
+                if (position <= 9) { 
+                    // Верхняя граница
+                    row = 0;
+                    col = position;
+                } else if (position <= 18) { 
+                    // Правая граница
+                    row = position - 9;
+                    col = 9;
+                } else if (position <= 27) { 
+                    // Нижняя граница
+                    row = 9;
+                    col = 27 - position;
+                } else { 
+                    // Левая граница
+                    row = 36 - position;
+                    col = 0;
+                }
+
+                const cell = document.getElementById(`cell-${row}-${col}`);
+                const playerDiv = document.createElement("div");
+                playerDiv.className = "player";
+
+                if (player.photo_url) {
+                    const img = document.createElement("img");
+                    img.src = player.photo_url;
+                    img.alt = player.name;
+                    img.style.width = "40px";
+                    img.style.height = "40px";
+                    img.style.borderRadius = "50%";
+                    img.style.border = `3px solid ${player.color}`;
+                    playerDiv.appendChild(img);
+                } else {
+                    const circle = document.createElement("div");
+                    circle.style.backgroundColor = player.color;
+                    circle.style.width = "40px";
+                    circle.style.height = "40px";
+                    circle.style.borderRadius = "50%";
+                    circle.style.display = "flex";
+                    circle.style.alignItems = "center";
+                    circle.style.justifyContent = "center";
+                    circle.textContent = player.name[0].toUpperCase(); 
+                    playerDiv.appendChild(circle);
+                }
+                cell.appendChild(playerDiv);
+            }
+        }
+
+        // Отправка запроса на бросок кубика
+        function rollDice() {
+            socket.send(JSON.stringify({ type: "roll_dice" }));
+        }
+
+        socket.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+
+            // Получаем список ячеек поля от сервера
+            if (message.type === "board_state") {
+                gameState.boardCells = message.board_cells;
+                createBoard();
+                updateBoard(gameState.players);
+            }
+
+            if (message.type === "offer_to_buy") {
+                const confirmBuy = confirm(message.message);
+                if (confirmBuy) {
+                    socket.send(JSON.stringify({
+                        type: "buy_property",
+                        cell: message.cell,
+                    }));
+
+                    const player = gameState.players[userId];
+                    for (const cell of gameState.boardCells) {
+                        if (cell.name === message.cell) {
+                            cell.owner = userId;
+                            const ownedCell = document.querySelector(`#cell-${player.position}`);
+                            if (ownedCell) {
+                                ownedCell.style.backgroundColor = player.color;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (message.type === "update_board") {
+                gameState = message.game_state;
+                createBoard();
+                updateBoard(gameState.players); 
+            }
+
+            if (message.type === "player_joined" || message.type === "dice_roll") {
+                gameState = message.game_state;
+                createBoard();
+                updateBoard(gameState.players);
+            }
+        };
+
+        function handleCellAction(cell, player) {
+            if (cell.type === "property") {
+                if (!cell.owner) {
+                    if (player.money >= cell.price) {
+                        if (confirm(`Вы хотите купить ${cell.name} за ${cell.price}?`)) {
+                            cell.owner = player.id;
+                            socket.send(JSON.stringify({
+                                type: "buy_property",
+                                cell: cell.name
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        const chanceCards = [
+            { text: "Получите 100", action: (player) => player.money += 100 },
+            { text: "Заплатите 50", action: (player) => player.money -= 50 },
+            { text: "Перейдите на Старт", action: (player) => player.position = 0 },
+            { text: "Идите в тюрьму", action: (player) => player.position = 6 }
+        ];
+
+        function drawChanceCard() {
+            const card = chanceCards[Math.floor(Math.random() * chanceCards.length)];
+            alert(card.text);
+            card.action(gameState.players[userId]);
+        }
+
+        // Создание поля при загрузке
+        createBoard();
+
+        // Добавляем событие на кнопку
+        document.getElementById("roll-dice").addEventListener("click", rollDice);
+    </script>
+</body>
+</html>
